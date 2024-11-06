@@ -155,3 +155,49 @@ exports.getPoolTransactionHistory = async (req, res) => {
     });
   }
 };
+
+// Get RECENT transaction history for a specific user
+exports.getRecentUserTransactionHistory = async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    const [results] = await db.query(
+      `SELECT * FROM transactions 
+       WHERE from_user_id = ? OR to_user_id = ? 
+       ORDER BY created_at DESC
+       LIMIT 3`,
+      [userId, userId]
+    );
+
+    res.status(200).json({ transactions: results });
+  } catch (err) {
+    console.error("Error fetching user transaction history:", err);
+    res.status(500).json({
+      message: "Failed to retrieve transaction history",
+      error: err,
+    });
+  }
+};
+
+// Get RECENT transaction history for a specific pool
+exports.getRecentPoolTransactionHistory = async (req, res) => {
+  const poolId = req.params.id;
+
+  try {
+    const [results] = await db.query(
+      `SELECT * FROM transactions 
+       WHERE from_pool_id = ? OR to_pool_id = ? 
+       ORDER BY created_at DESC
+       LIMIT 3`,
+      [poolId, poolId]
+    );
+
+    res.status(200).json({ transactions: results });
+  } catch (err) {
+    console.error("Error fetching pool transaction history:", err);
+    res.status(500).json({
+      message: "Failed to retrieve pool transaction history",
+      error: err,
+    });
+  }
+};
