@@ -82,7 +82,46 @@ exports.getAllPools = async (req, res) => {
       `SELECT p.* 
        FROM pools p
        JOIN pool_members pm ON p.pool_id = pm.pool_id
-       WHERE pm.user_id = ? AND p.active = 1 limit 3`,
+       WHERE pm.user_id = ? AND p.active = 1`,
+      [userId]
+    );
+
+    if (pools.length === 0) {
+      return res.status(200).json({ pools: [] });
+    }
+
+    const poolIds = pools.map((pool) => pool.pool_id);
+    const [members] = await db.query(
+      `SELECT pm.pool_id, u.email
+       FROM pool_members pm
+       JOIN users u ON pm.user_id = u.user_id
+       WHERE pm.pool_id IN (?)`,
+      [poolIds]
+    );
+
+    const poolsWithMembers = pools.map((pool) => ({
+      ...pool,
+      members: members
+        .filter((member) => member.pool_id === pool.pool_id)
+        .map((member) => member.email),
+    }));
+
+    res.status(200).json({ pools: poolsWithMembers });
+  } catch (err) {
+    console.error("Error fetching pools:", err);
+    res.status(500).json({ message: "Failed to fetch pools", error: err });
+  }
+};
+
+exports.getAllRecentPools = async (req, res) => {
+  const userId = req.user.user_id;
+
+  try {
+    const [pools] = await db.query(
+      `SELECT p.* 
+       FROM pools p
+       JOIN pool_members pm ON p.pool_id = pm.pool_id
+       WHERE pm.user_id = ? AND p.active = 1 LIMIT 3`,
       [userId]
     );
 

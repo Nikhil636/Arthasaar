@@ -11,6 +11,7 @@ const authRoutes = require("./routes/authRoutes");
 const poolRoutes = require("./routes/poolRoutes");
 const userRoutes = require("./routes/userRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
+const homeRoutes = require("./routes/homeRoutes");
 
 // Log incoming requests
 app.use((req, res, next) => {
@@ -27,6 +28,7 @@ app.post("/test", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/pools", poolRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/home", homeRoutes);
 app.use("/api/transactions", transactionRoutes);
 
 module.exports = app;

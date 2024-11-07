@@ -9,6 +9,7 @@ const {
   updatePoolDetails,
   removeMemberFromPool,
   changeMemberRole,
+  getAllRecentPools,
 } = require("../controllers/poolController");
 const router = express.Router();
 
@@ -17,6 +18,9 @@ router.post("/create", verifyToken, createPool);
 
 // All Pools Route
 router.get("/", verifyToken, getAllPools);
+
+// Get recent Pools that the user is a part of
+router.get("/recent", verifyToken, getAllRecentPools);
 
 // Get Pool Details Route
 router.get("/:id", verifyToken, getPoolDetails);
