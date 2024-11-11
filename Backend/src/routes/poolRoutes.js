@@ -10,6 +10,7 @@ const {
   removeMemberFromPool,
   changeMemberRole,
   getAllRecentPools,
+  settlePoolBalance,
 } = require("../controllers/poolController");
 const router = express.Router();
 
@@ -39,5 +40,8 @@ router.post("/:id/removeMember", verifyToken, removeMemberFromPool);
 
 // Change Member Role Route
 router.post("/:id/changeRole", verifyToken, changeMemberRole);
+
+// Settle Pool Balance Route
+router.post("/:id/settle", verifyToken, settlePoolBalance);
 
 module.exports = router;

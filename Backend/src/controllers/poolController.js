@@ -238,20 +238,30 @@ exports.addMemberToPool = async (req, res) => {
 // Soft-delete a pool
 exports.deletePool = async (req, res) => {
   const poolId = req.params.id;
-  const userId = req.user.user_id;
+  const userId = req.user.user_id; // This comes from the verified token
 
   try {
-    const [result] = await db.query(
+    // Check if the user is an admin of the pool
+    const [adminCheckResult] = await db.query(
       `SELECT role FROM pool_members WHERE pool_id = ? AND user_id = ?`,
       [poolId, userId]
     );
 
-    if (result.length === 0 || result[0].role !== "admin") {
+    if (adminCheckResult.length === 0 || adminCheckResult[0].role !== "admin") {
       return res
         .status(403)
         .json({ message: "Only pool admins can delete the pool" });
     }
 
+    // Call settlePoolBalance to distribute balance among members
+    const settleResponse = await this.settlePoolBalance(req, res);
+
+    // Check if the balance settlement was successful before proceeding
+    if (settleResponse.statusCode !== 200) {
+      return res.status(settleResponse.statusCode).json(settleResponse.body);
+    }
+
+    // Proceed with soft deletion of the pool after balance settlement
     await db.query("UPDATE pools SET active = 0 WHERE pool_id = ?", [poolId]);
 
     res.status(200).json({ message: "Pool deleted successfully" });
@@ -375,5 +385,96 @@ exports.changeMemberRole = async (req, res) => {
     res
       .status(500)
       .json({ message: "Failed to update member role", error: err });
+  }
+};
+
+//Settle Pool Balance
+exports.settlePoolBalance = async (req, res) => {
+  const poolId = req.params.id;
+  const userId = req.user.user_id; // Assumes this comes from a verified token
+
+  let connection;
+
+  try {
+    // Get a connection and begin a transaction
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    // Check if the user is an admin of the pool
+    const [adminCheckResult] = await connection.query(
+      `SELECT role FROM pool_members WHERE pool_id = ? AND user_id = ?`,
+      [poolId, userId]
+    );
+
+    if (adminCheckResult.length === 0 || adminCheckResult[0].role !== "admin") {
+      await connection.rollback();
+      return res
+        .status(403)
+        .json({ message: "Only the pool admin can settle the balance" });
+    }
+
+    // Get the current pool balance and member list
+    const [poolResult] = await connection.query(
+      `SELECT pool_balance FROM pools WHERE pool_id = ? AND active = 1`,
+      [poolId]
+    );
+    if (poolResult.length === 0) {
+      await connection.rollback();
+      return res.status(200).json({ message: "Pool not found or inactive" });
+    }
+
+    const poolBalance = poolResult[0].pool_balance;
+    if (poolBalance <= 0) {
+      await connection.rollback();
+      return res
+        .status(200)
+        .json({ message: "No balance to settle in the pool" });
+    }
+
+    // Get all members of the pool
+    const [members] = await connection.query(
+      `SELECT user_id FROM pool_members WHERE pool_id = ?`,
+      [poolId]
+    );
+
+    if (members.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ message: "No members found in the pool" });
+    }
+
+    // Calculate equal share
+    const sharePerMember = poolBalance / members.length;
+
+    // Distribute shares to each member
+    const updatePromises = members.map((member) =>
+      connection.query(
+        `UPDATE users SET balance = balance + ? WHERE user_id = ?`,
+        [sharePerMember, member.user_id]
+      )
+    );
+
+    await Promise.all(updatePromises);
+
+    // Set pool balance to zero after distribution
+    await connection.query(
+      `UPDATE pools SET pool_balance = 0 WHERE pool_id = ?`,
+      [poolId]
+    );
+
+    // Commit transaction
+    await connection.commit();
+
+    res
+      .status(200)
+      .json({ message: "Pool balance settled successfully among members" });
+  } catch (err) {
+    console.error("Error settling pool balance:", err);
+    if (connection) await connection.rollback();
+    res
+      .status(500)
+      .json({ message: "Failed to settle pool balance", error: err });
+  } finally {
+    // Release the connection back to the pool
+    if (connection) connection.release();
   }
 };
